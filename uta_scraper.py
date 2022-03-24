@@ -32,14 +32,27 @@ def get_all_courses(dept, uppercase_depts):
 if __name__ == '__main__':
     r = requests.get(BASE)
 
+    # BeautifulSoup object - represents the document as a nested data structure:
+    print("1. Creating base catalog page object...")
     base_page = BeautifulSoup(r.text, 'html.parser')
+    print("1. Finished creating base catalog page object.\n")
+    
+    # "sitemap" class - big block of all departments and their links
+    print("2. Getting departments block container...")
     department_container = base_page.find('div', class_='sitemap')
+    print("2. Finished getting departments block container.\n")
+
+    # "a" tag - contains link to each department's course descriptions
+    print("3. Getting each department container...")
     departments = department_container.find_all('a')
+    print("3. Finished getting each department container.\n")
 
-    # Webpages that use uppercase in the GET requests
-    uppercase_depts = ['UNIV-AT', 'UNIV-BU', 'UNIV-EN', 'UNIV-HN', 'UNIV-SC', 'UNIV-SW']
+    # Webpages that use uppercase in the GET requests, regular method won't work
+    uppercase_depts = ['UNIV-AT', 'UNIV-BU', 'UNIV-EN', 'UNIV-HN', 'UNISV-SC', 'UNIV-SW']
 
-    all_departments = get_all_departments(departments)
+    print("4. Getting each department...")
+    all_departments = get_all_departments(departments) # list of lists
+    print("4. Finished getting each department.\n")
 
     # TODO: clean below and put into functions or something, this is bad
 
@@ -48,8 +61,15 @@ if __name__ == '__main__':
 
     # Fetching all courses in each department ~~~
     for dept in all_departments:
+        '''
+        dept[0] = acronym of department name
+        dept[1] = full department name
+        '''
+
         asl_univ = False
         num_of_courses = 0
+
+        print(f"Processing {dept}...")
 
         # These departments are uppercase in the URL
         if uppercase_depts and any(elem == dept[0] for elem in uppercase_depts):
@@ -59,16 +79,21 @@ if __name__ == '__main__':
         else:
             r = requests.get(f'{BASE}{dept[0].lower()}')
 
+        # Starting deep dive into department's own course catalog
         department_page = BeautifulSoup(r.text, 'html.parser')
         
         # Only ASL department has different HTML formatting
-        try:
-            course_container = department_page.find('div', class_='courses')
-            courses = course_container.find_all('div', class_='courseblock')
-        except AttributeError:
-            course_container = department_page.find('div', id='textcontainer')
-            courses = course_container.find_all('p')
-            asl_univ = True
+        if dept[0] == "BSAD/BUSA": # BSAD/BUSA, UNIV-SC doesn't work
+            courses_container = department_page.find('div', class_='courses')
+            print(f"{type(courses_container)} - {courses_container}")
+        else:
+            try:
+                courses_container = department_page.find('div', class_='courses')
+                courses = courses_container.find_all('div', class_='courseblock')
+            except AttributeError:
+                courses_container = department_page.find('div', id='textcontainer')
+                courses = courses_container.find_all('p')
+                asl_univ = True
         
         for c in courses:
             num_of_courses = num_of_courses + 1
@@ -79,7 +104,7 @@ if __name__ == '__main__':
             # few lines of code.
             course_title = c.find('strong')
 
-            # Originally had '\xa0' instead of ' '
+            # Originally gave '\xa0' instead of ' '
             course_string = unicodedata.normalize("NFKD", str(course_title.string))
             
             # Get course dept & id
@@ -149,3 +174,4 @@ if __name__ == '__main__':
 
         # Add course to catalog
         all_courses.append(course_json)
+        print(f"Finished processing {dept} and added to course list.\n")
