@@ -48,7 +48,7 @@ if __name__ == '__main__':
     print("3. Finished getting each department container.\n")
 
     # Webpages that use uppercase in the GET requests, regular method won't work
-    uppercase_depts = ['UNIV-AT', 'UNIV-BU', 'UNIV-EN', 'UNIV-HN', 'UNISV-SC', 'UNIV-SW']
+    uppercase_depts = ['UNIV-AT', 'UNIV-BU', 'UNIV-EN', 'UNIV-HN', 'UNIV-SC', 'UNIV-SW']
 
     print("4. Getting each department...")
     all_departments = get_all_departments(departments) # list of lists
@@ -65,17 +65,22 @@ if __name__ == '__main__':
         dept[0] = acronym of department name
         dept[1] = full department name
         '''
-
         asl_univ = False
         num_of_courses = 0
 
-        print(f"Processing {dept}...")
+        print(f"Processing {dept[1]}...")
 
         # These departments are uppercase in the URL
         if uppercase_depts and any(elem == dept[0] for elem in uppercase_depts):
             univ = dept[0]
             r = requests.get(f'{BASE}{dept[0]}')
             uppercase_depts.remove(univ)
+        # Hot fix for BSAD/BUSA only - URL only uses 'bsad', not 'bsad/busa'
+        elif dept[0] == "BSAD/BUSA":
+            r = requests.get(f'{BASE}bsad')
+        # Hot fix for NURS-HI only - URL uses 'nurshi', not 'nurs-hi
+        elif dept[0] == "NURS-HI":
+            r = requests.get(f'{BASE}nurshi')
         else:
             r = requests.get(f'{BASE}{dept[0].lower()}')
 
@@ -83,13 +88,15 @@ if __name__ == '__main__':
         department_page = BeautifulSoup(r.text, 'html.parser')
         
         # Only ASL department has different HTML formatting
-        if dept[0] == "BSAD/BUSA": # BSAD/BUSA, UNIV-SC doesn't work
-            courses_container = department_page.find('div', class_='courses')
-            print(f"{type(courses_container)} - {courses_container}")
+        if dept[0] == "BSAD/BUSA": # BSAD/BUSA doesn't work
+            courses = []
+            courses_container = department_page.find_all('div', class_='courses') # ResultSet class
+            for c in courses_container: # Tag class, iterates twice
+                print(len(c.find_all('div', class_='courseblock')))
         else:
             try:
-                courses_container = department_page.find('div', class_='courses')
-                courses = courses_container.find_all('div', class_='courseblock')
+                courses_container = department_page.find('div', class_='courses') # Tag class
+                courses = courses_container.find_all('div', class_='courseblock') # Tag class
             except AttributeError:
                 courses_container = department_page.find('div', id='textcontainer')
                 courses = courses_container.find_all('p')
@@ -147,14 +154,17 @@ if __name__ == '__main__':
             if len(course_line) > 1:
                 # Originally had '\xa0' instead of ' '
                 course_prerequisites = unicodedata.normalize("NFKD", course_line[1])
+                #print(f"1 (len is {len(course_prerequisites)} -> {course_prerequisites}|||{type(course_prerequisites)}")
 
                 # Delete ': '
                 course_prerequisites = course_prerequisites[2:]
+                #print(f"2 (len is {len(course_prerequisites)} -> {course_prerequisites}|||{type(course_prerequisites)}")
 
                 # Delete ending '.' and ' ' for when course has 'Prerequisites: '
-                if course_prerequisites[0] == ' ':
+                if course_prerequisites.startswith(' '):
                     course_prerequisites = course_prerequisites[1:]
-                if course_prerequisites[-1] == '.':
+                #print("going to next")
+                if course_prerequisites.endswith('.'):
                     course_prerequisites = course_prerequisites[:-1]
             else:
                 course_prerequisites = None
@@ -174,4 +184,4 @@ if __name__ == '__main__':
 
         # Add course to catalog
         all_courses.append(course_json)
-        print(f"Finished processing {dept} and added to course list.\n")
+        print(f"Adding {dept} to course list.\n")
