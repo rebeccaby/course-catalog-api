@@ -9,6 +9,26 @@ BASE = 'https://catalog.uta.edu/coursedescriptions/'
 def get_one_department():
     pass
 
+def get_all_courses(dept, uppercase_depts):
+    pass
+
+def setup_department_catalogs():
+    r = requests.get(BASE)
+
+    # BeautifulSoup object - represents the document as a nested data structure:
+    print("1. Creating base catalog page object...")
+    base_page = BeautifulSoup(r.text, 'html.parser')
+    
+    # "sitemap" class - big block of all departments and their links
+    print("2. Getting department block containers...")
+    department_container = base_page.find('div', class_='sitemap')
+
+    # "a" tag - contains link to each department's course descriptions
+    print("3. Getting each department container...")
+    departments = department_container.find_all('a')
+
+    return departments
+
 def get_all_departments(departments):
     departments_list = []
 
@@ -26,36 +46,16 @@ def get_all_departments(departments):
 
     return departments_list
 
-def get_all_courses(dept, uppercase_depts):
-    pass
-
 if __name__ == '__main__':
-    r = requests.get(BASE)
-
-    # BeautifulSoup object - represents the document as a nested data structure:
-    print("1. Creating base catalog page object...")
-    base_page = BeautifulSoup(r.text, 'html.parser')
-    print("1. Finished creating base catalog page object.\n")
-    
-    # "sitemap" class - big block of all departments and their links
-    print("2. Getting departments block container...")
-    department_container = base_page.find('div', class_='sitemap')
-    print("2. Finished getting departments block container.\n")
-
-    # "a" tag - contains link to each department's course descriptions
-    print("3. Getting each department container...")
-    departments = department_container.find_all('a')
-    print("3. Finished getting each department container.\n")
-
     # Webpages that use uppercase in the GET requests, regular method won't work
     uppercase_depts = ['UNIV-AT', 'UNIV-BU', 'UNIV-EN', 'UNIV-HN', 'UNIV-SC', 'UNIV-SW']
 
-    print("4. Getting each department...")
-    all_departments = get_all_departments(departments) # list of lists
-    print("4. Finished getting each department.\n")
+    # Returns ResultSet containing all department 'a' containers and their own catalog links
+    departments = setup_department_catalogs()
 
-    # TODO: clean below and put into functions or something, this is bad
-
+    # Returns List of Lists containing department initials and names
+    all_departments = get_all_departments(departments)
+    
     all_courses = []
     i = 0
 
@@ -68,7 +68,7 @@ if __name__ == '__main__':
         asl_univ = False
         num_of_courses = 0
 
-        print(f"Processing {dept[1]}...")
+        print(f"Processing {dept[1]} page...")
 
         # These departments are uppercase in the URL
         if uppercase_depts and any(elem == dept[0] for elem in uppercase_depts):
@@ -89,14 +89,21 @@ if __name__ == '__main__':
         
         # Only ASL department has different HTML formatting
         if dept[0] == "BSAD/BUSA": # BSAD/BUSA doesn't work
-            courses = []
-            courses_container = department_page.find_all('div', class_='courses') # ResultSet class
-            for c in courses_container: # Tag class, iterates twice
-                print(len(c.find_all('div', class_='courseblock')))
+            # ResultSet class
+            courses_container = department_page.find_all('div', class_='courses')
+            '''
+            for c in courses_container: # c is a Tag
+                courses = c.find_all('div', class_='courseblock')
+            '''
+            # brain not working, coming back later
+            bsad_courses = courses_container[0].find_all('div', class_='courseblock') # BSAD
+            busa_courses = courses_container[1].find_all('div', class_='courseblock') # BUSA
+
+            courses = bsad_courses + busa_courses
         else:
             try:
                 courses_container = department_page.find('div', class_='courses') # Tag class
-                courses = courses_container.find_all('div', class_='courseblock') # Tag class
+                courses = courses_container.find_all('div', class_='courseblock') # ResultSet class
             except AttributeError:
                 courses_container = department_page.find('div', id='textcontainer')
                 courses = courses_container.find_all('p')
@@ -154,16 +161,13 @@ if __name__ == '__main__':
             if len(course_line) > 1:
                 # Originally had '\xa0' instead of ' '
                 course_prerequisites = unicodedata.normalize("NFKD", course_line[1])
-                #print(f"1 (len is {len(course_prerequisites)} -> {course_prerequisites}|||{type(course_prerequisites)}")
 
                 # Delete ': '
                 course_prerequisites = course_prerequisites[2:]
-                #print(f"2 (len is {len(course_prerequisites)} -> {course_prerequisites}|||{type(course_prerequisites)}")
 
                 # Delete ending '.' and ' ' for when course has 'Prerequisites: '
                 if course_prerequisites.startswith(' '):
                     course_prerequisites = course_prerequisites[1:]
-                #print("going to next")
                 if course_prerequisites.endswith('.'):
                     course_prerequisites = course_prerequisites[:-1]
             else:
@@ -185,3 +189,5 @@ if __name__ == '__main__':
         # Add course to catalog
         all_courses.append(course_json)
         print(f"Adding {dept} to course list.\n")
+
+    print(all_courses)
