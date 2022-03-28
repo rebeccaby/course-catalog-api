@@ -7,12 +7,6 @@ import json
 
 BASE = 'https://catalog.uta.edu/coursedescriptions/'
 
-def get_one_department():
-    pass
-
-def get_all_courses(dept, uppercase_depts):
-    pass
-
 def setup_department_catalogs():
     r = requests.get(BASE)
 
@@ -176,12 +170,13 @@ if __name__ == '__main__':
             all_courses.append({
                 'id': course_dept.lower() + str(course_num),    # cse1325 (lowercase to make it look nice in URLs)
                 'course_num': course_num,                       # 1325
-                'department': course_dept,                      # CSE
+                #'department_id': course_dept,                      # CSE
                 'name': course_name,                            # OBJECT-ORIENTED PROGRAMMING
                 'description': course_desc,                     # Object-oriented concepts, ...
                 'num_of_hours': course_hours,                   # 3
                 'prerequisites': course_prerequisites,          # CSE 1320
-                'tccn_id': course_tccn                          # None
+                'tccn_id': course_tccn,                         # None
+                'department_model_id': course_dept.lower()
             })
         
         # Get number of courses per department
@@ -192,11 +187,10 @@ if __name__ == '__main__':
 
     departments_json = {'departments': all_departments}
     departments_json_string = json.dumps(departments_json, indent=4)
-    courses_json = {'courses': all_courses}
-    courses_json_string = json.dumps(courses_json, indent=4)
-
     with open('departments.json', 'w') as outfile:
         outfile.write(departments_json_string)
 
+    courses_json = {'courses': all_courses}
+    courses_json_string = json.dumps(courses_json, indent=4)
     with open('courses.json', 'w') as outfile:
         outfile.write(courses_json_string)

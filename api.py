@@ -25,7 +25,7 @@ department_resource_fields = {
 course_resource_fields = {
     'id': fields.String,
     'course_num': fields.Integer,
-    'department_id': fields.String,
+    #'department_id': fields.String,
     'name': fields.String,
     'description': fields.String,
     'num_of_hours': fields.Integer,
@@ -53,13 +53,14 @@ class DepartmentModel(db.Model):
 class CourseModel(db.Model):
     id = db.Column(db.String(MAX_COURSE_ID_LENGTH), primary_key=True)
     course_num = db.Column(db.Integer, nullable=False)
-    department_id = db.Column(db.String(MAX_DEPT_ID_LENGTH), nullable=False)
+    #department_id = db.Column(db.String(MAX_DEPT_ID_LENGTH), nullable=False)
     name = db.Column(db.String(MAX_COURSE_NAME_LENGTH), nullable=False)
     description = db.Column(db.String(MAX_COURSE_DESC_LENGTH), nullable=False)
     num_of_hours = db.Column(db.Integer, nullable=False)
     prerequisites = db.Column(db.String(MAX_COURSE_PREREQ_LENGTH), nullable=False)
     tccn_id = db.Column(db.String(MAX_COURSE_ID_LENGTH), nullable=False)
     department_model_id = db.Column(db.String(MAX_DEPT_ID_LENGTH), db.ForeignKey('department_model.id'), nullable=False)
+    # Table name of DepartmentModel -> department_model
     
     def __repr__(self):
         return f'Course name = {self.name}'
@@ -67,16 +68,18 @@ class CourseModel(db.Model):
     def to_json(self):
         return {
             'id': self.id,
-            'course_num': int(self.id),
-            'department_id': self.department_id,
+            'course_num': int(self.course_num),
+            #'department_id': self.department_id,
             'name': self.name,
             'description': self.description,
             'num_of_hours': int(self.num_of_hours),
             'prerequisites': self.prerequisites,
-            'tccn_id': self.tccn_id
+            'tccn_id': self.tccn_id,
+            'department_model_id': self.department_model_id
         }
 
-# Only do first time/when a column is added, will rewr#ite database if done again
+# Only do first time/when a column is added, will rewrite database if done again
+# Try if 'OperationalError: no such column' happens
 #db.create_all()
 
 # Argument Parsers - Validates POST/PUT requests and ensures necessary info is sent with the request
@@ -90,13 +93,19 @@ department_put_args.add_argument('num_of_courses', type=int, required=True, help
 
 course_put_args.add_argument('id', type=str, required=True, help='Course ID cannot be blank.')
 course_put_args.add_argument('course_num', type=int, required=True, help='Course number cannot be blank.')
-course_put_args.add_argument('department_id', type=str, required=True, help='Course\'s department ID cannot be blank.')
+#course_put_args.add_argument('department_id', type=str, required=True, help='Course\'s department ID cannot be blank.')
 course_put_args.add_argument('name', type=str, required=True, help='Course name cannot be blank.')
 course_put_args.add_argument('description', type=str, required=True)
 course_put_args.add_argument('num_of_hours', type=int, required=True, help='Course number of hours cannot be blank.')
 course_put_args.add_argument('prerequisites', type=str, required=True)
 course_put_args.add_argument('tccn_id', type=str, required=True)
 course_put_args.add_argument('department_model_id', type=str, required=True)
+
+class HomePage(Resource):
+    def get(self):
+        result_departments = DepartmentModel.query.all()
+        result_courses = CourseModel.query.all()
+        return [r.to_json() for r in result_departments] + [r.to_json() for r in result_courses]
 
 class DepartmentList(Resource):
     def get(self):
@@ -109,7 +118,6 @@ class CourseList(Resource):
         return [r.to_json() for r in result]
 
 class Department(Resource):
-    # Read
     @marshal_with(department_resource_fields) # Decorator that serializes result with given fields into JSON format
     def get(self, department_id):
         result = DepartmentModel.query.filter_by(id=department_id).first() # Returns DepartmentModel instance
@@ -117,7 +125,6 @@ class Department(Resource):
             abort(409, message="Department ID doesn't exist.")
         return result, 200
 
-    # Create
     @marshal_with(department_resource_fields)
     def put(self, department_id):
         args = department_put_args.parse_args()
@@ -129,7 +136,6 @@ class Department(Resource):
         db.session.commit()
         return department, 201
         
-    # Delete
     def delete(self, department_id):
         result = DepartmentModel.query.filter_by(id=department_id).first()
         if not result:
@@ -152,7 +158,7 @@ class Course(Resource):
         result = CourseModel.query.filter_by(id=course_id).first()
         if result:
             abort(409, message="Course ID taken.")
-        course = CourseModel(id=course_id, course_num=args['course_num'], department_id=args['department_id'], 
+        course = CourseModel(id=course_id, course_num=args['course_num'], #department_id=args['department_id'], 
             name=args['name'], description=args['description'], num_of_hours=args['num_of_hours'], 
             prerequisites=args['prerequisites'], tccn_id=args['tccn_id'], department_model_id=args['department_model_id'])
         db.session.add(course)
@@ -167,6 +173,7 @@ class Course(Resource):
         db.session.commit()
         return '', 204
 
+api.add_resource(HomePage, '/')
 api.add_resource(DepartmentList, '/department')
 api.add_resource(Department, '/department/<string:department_id>')
 api.add_resource(CourseList, '/course')
