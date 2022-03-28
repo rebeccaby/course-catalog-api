@@ -25,15 +25,6 @@ if __name__ == '__main__':
 # Scraper:
 #   Store departments/classes to respective local files
 # 
-# POST Script:
-#   Check diff of department and class files 
-#   If no files exist, just exit after saying 'run the other program'
-#   Send each request, wait 500ms in between
-#   Save and display all failed POST requests at the end
-#   Have test function to GET all courses
-#
-#
-#
 # Notes:
 # Active venv: $ source venv/bin/activate
 # Deactivate venv: $ deactivate
