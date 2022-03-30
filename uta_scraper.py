@@ -7,35 +7,163 @@ import json
 
 BASE = 'https://catalog.uta.edu/coursedescriptions/'
 
+""" Gets the containers with the links for each department
+Parameters: None
+Return: bs4.element.ResultSet containing a bs4.element.Tag for each department
+"""
 def setup_department_catalogs():
-    r = requests.get(BASE)
+    try:
+        r = requests.get(BASE)
+        r.raise_for_status()
+    except requests.exceptions.ConnectionError:
+        raise SystemExit(f"A Connection error occurred to {BASE}.")
+    except requests.exceptions.HTTPError:
+        raise SystemExit(f"An HTTP error occurred to {BASE}.")
 
-    # BeautifulSoup object - represents the document as a nested data structure:
     base_page = BeautifulSoup(r.text, 'html.parser')
     
-    # "sitemap" class - big block of all departments and their links
+    # "sitemap" class - one large block with all departments and their links
     department_container = base_page.find('div', class_='sitemap')
 
-    # "a" tag - contains link to each department's course descriptions
-    departments = department_container.find_all('a')
+    if department_container is not None:
+        # "a" tag - getting just the links to each department's course catalog page
+        return department_container.find_all('a')
+    else:
+        raise SystemExit("No container to be parsed was found in variable \"department_container\".")
 
-    return departments
-
-def get_all_departments(departments):
+""" Extract just the necessary information to put together each department's URL
+Parameters: departments -> bs4.element.ResultSet: contains multiple bs4.element.Tags
+Return: list of all departments and their department IDs
+"""
+def get_departments_list(departments):
     departments_list = []
 
     for d in departments:
         # Separate department name & id
         # Made it backwards to make getting the ID a tiny bit simpler
-        dept_str = str(d.string)[::-1]
-        dept_str = dept_str[1:]
+        dept_str = str(d.string)[::-1].strip(')')
         dept_info = dept_str.split('(', 1)
 
         # Get department name & id (ignore 1st line, which is empty for some reason)
         if len(dept_info) > 1:
-            departments_list.append({'id': dept_info[0][::-1], 'name': dept_info[1][:0:-1]})
+            departments_list.append({
+                'id': dept_info[0][::-1], 
+                'name': dept_info[1][:0:-1]
+            })
 
     return departments_list
+
+""" Access a department page
+Parameters: id -> str: uppercase department ID
+            uppercase_depts -> list: department IDs requiring uppercase URLs
+Return: bs4.BeautifulSoup object of department page, modified uppercase_depts
+"""
+def get_department_page(id, uppercase_depts):
+    # NOTE: Department pages are accessed with the lowercase department ID appended in most cases.
+    # A few departments have exceptions, using uppercase or differing from the explicit ID in the department title.
+    # These edge cases have their conditions listed below.
+
+    try:
+        # # The expected URL
+        r = requests.get(f'{BASE}{id.lower()}')
+        r.raise_for_status()
+    except requests.exceptions.HTTPError:
+        if uppercase_depts and any(elem == id for elem in uppercase_depts):
+            r = requests.get(f'{BASE}{id}')
+            uppercase_depts.remove(id)
+        # BSAD/BUSA - URL only uses "bsad", not "bsad/busa"
+        if id == "BSAD/BUSA":
+            r = requests.get(f'{BASE}bsad')
+        # NURS-HI - URL uses "nurshi", not "nurs-hi"
+        if id == "NURS-HI":
+            r = requests.get(f'{BASE}nurshi')
+    except requests.exceptions.RequestException:
+        raise SystemExit("An unknown error has occurred.")
+
+        # TODO: handle possible ConnectionError exception as well?
+
+    return BeautifulSoup(r.text, 'html.parser'), uppercase_depts
+
+""" Extract all course information from a department page
+Parameters: department_page -> bs4.BeautifulSoup: department page as nested data structure
+            id -> str: uppercase department ID
+            asl_flag -> bool: marker that requires a different way to extract course information
+Return: bs4.element.ResultSet of all course description containers, asl_flag boolean
+"""
+def get_departments_course_catalog(department_page, id, asl_flag):
+    if id == "BSAD/BUSA":
+        # NOTE: HTML in BSAD/BUSA page is slightly different from other department pages. courses are directly from department_page,
+        # instead of having to get the courses list container first.
+        return department_page.find_all('div', class_='courseblock'), asl_flag # ResultSet
+    try:
+        # The expected formatting for most departments
+        courses_container = department_page.find('div', class_='courses') # Tag class
+        courses = courses_container.find_all('div', class_='courseblock') # ResultSet class
+    # ASL department has entirely different HTML formatting
+    except AttributeError:
+        courses_container = department_page.find('div', id='textcontainer')
+        courses = courses_container.find_all('p')
+        asl_flag = True
+
+    return courses, asl_flag
+
+""" Get course description from tags
+Parameters: course -> bs4.element.Tag: 'div' that contains all information for a course
+            asl_flag -> bool: marker that requires a different way to extract course information
+Return: course description string
+"""
+def get_course_description(course, asl_flag):
+    # Course descriptions are in <p>, after <strong>
+    description = ""
+    if asl_flag is True:
+        for sibling in course.br.next_siblings:
+            description += str(sibling.string).strip('\n')
+    else:
+        # NOTE: Tag has multiple children, which always starts with the course description & ends with a
+        # 'br' and None tag. Additional children in between may include prerequisites in 'a' tags, or
+        # more text in the prerequisites.
+        description_block = course.find('p', class_='courseblockdesc')
+        for child in description_block.children:
+            if child.name != 'br' and not str(child).isspace():
+                # BUG: add 1 whitespace before <a> text
+                description += str(child.string).strip('\n')
+
+    return description
+
+""" Get course prerequisites from the course description
+Parameters: description -> str: course description
+Return: course prerequisites string
+"""   
+def get_course_prerequisites(description):
+    # All courses have 'Prerequisite: ' or 'Prerequisites: '
+    course_line = description.split('Prerequisite')
+    
+    # If there were any prerequisites
+    if len(course_line) > 1:
+        # Originally had '\xa0' instead of ' '
+        prerequisites = unicodedata.normalize("NFKD", course_line[1])
+
+        # Delete ': '
+        prerequisites = prerequisites[2:]
+
+        # Delete leading ' ' and ending '.' if exists
+        if prerequisites.startswith(' '):
+            prerequisites = prerequisites[1:]
+        if prerequisites.endswith('.'):
+            prerequisites = prerequisites[:-1]
+    else:
+        prerequisites = ""
+
+    return prerequisites
+
+""" Get course TCCN id, if available
+Parameters: header_info -> str: tail end of course header that contains an equivalent TCCN ID
+Return: TCCN ID string
+"""
+def get_course_tccn_id(header_info):
+    # TCCN ID always inside parentheses
+    temp = header_info.split('=')
+    return temp[-1][1:-1]
 
 if __name__ == '__main__':
     # URLs that use uppercase in the GET requests, regular method won't work
@@ -44,142 +172,72 @@ if __name__ == '__main__':
     # Returns ResultSet containing all department 'a' containers and their own catalog links
     departments = setup_department_catalogs()
 
-    # Returns List of Lists containing department initials and names
-    all_departments = get_all_departments(departments) # List of Dicts
-    all_courses = [] # List of Dicts
+    # Returns list of dicts containing department initials and names
+    all_departments = get_departments_list(departments)
+
+    all_courses = [] # Final list of dicts that will contain all offered courses
     course_counter = 0 # Index for keeping track of which department has a number of courses
 
     # Fetching all courses in each department ~~~
     for dept in all_departments:
-        '''
-        dept = {'id': department initials, 'name': department name}
-        '''
-        asl_univ = False
+        asl_flag = False # Explicit flag used since HTML of entire department page is different from the rest
         num_of_courses = 0
 
         print(f"Processing {dept['name']} page...")
 
-        # These departments are uppercase in the URL
-        if uppercase_depts and any(elem == dept["id"] for elem in uppercase_depts):
-            r = requests.get(f'{BASE}{dept["id"]}')
-            uppercase_depts.remove(dept["id"])
-        # Hot fix for BSAD/BUSA only - URL only uses 'bsad', not 'bsad/busa'
-        elif dept["id"] == "BSAD/BUSA":
-            r = requests.get(f'{BASE}bsad')
-        # Hot fix for NURS-HI only - URL uses 'nurshi', not 'nurs-hi
-        elif dept["id"] == "NURS-HI":
-            r = requests.get(f'{BASE}nurshi')
-        else:
-            r = requests.get(f'{BASE}{dept["id"].lower()}')
+        department_page, uppercase_depts = get_department_page(dept['id'], uppercase_depts)
 
-        # Starting deep dive into department's own course catalog
-        department_page = BeautifulSoup(r.text, 'html.parser')
+        courses, asl_flag = get_departments_course_catalog(department_page, dept['id'], asl_flag)
         
-        # Only ASL department has different HTML formatting
-        if dept["id"] == "BSAD/BUSA": # BSAD/BUSA doesn't work
-            # ResultSet class
-            courses_container = department_page.find_all('div', class_='courses')
-
-            '''
-            for c in courses_container: # c is a Tag
-                courses = c.find_all('div', class_='courseblock')
-            '''
-            # brain not working, coming back later to try to use above instead (cleaner-looking?)
-            bsad_courses = courses_container[0].find_all('div', class_='courseblock') # BSAD
-            busa_courses = courses_container[1].find_all('div', class_='courseblock') # BUSA
-
-            courses = bsad_courses + busa_courses
-        else:
-            try:
-                courses_container = department_page.find('div', class_='courses') # Tag class
-                courses = courses_container.find_all('div', class_='courseblock') # ResultSet class
-            except AttributeError:
-                courses_container = department_page.find('div', id='textcontainer')
-                courses = courses_container.find_all('p')
-                asl_univ = True
-        
+        # Extracting all course data
         for c in courses:
             num_of_courses += 1
+            tccn_id = ""
 
             # NOTE: can find by class name here as well, but description text is wrapped in a 'strong' tag.
             # There's only 1 'strong' tag per course block, so find by 'strong' instead to cut down on a
             # few lines of code.
-            course_title = c.find('strong')
+            header_block = c.find('strong')
 
             # Originally gave '\xa0' instead of ' '
-            course_string = unicodedata.normalize("NFKD", str(course_title.string))
+            header = unicodedata.normalize("NFKD", str(header_block.string))
+
+            # Separating the course ID (and TCCN ID, if there is one) from the rest of the header
+            # '.'s act as delimiters
+            header_info = header.split('.', maxsplit=1)
+            department_model_id = header_info[0].split(' ')[0]
+            course_num = int(header_info[0].split(' ')[1])
             
-            # Get course dept & id
-            course_info = course_string.split('.', maxsplit=1)
-            course_dept = course_info[0].split(' ')[0]
-            course_num = int(course_info[0].split(' ')[1])
-            course_id = course_dept.lower() + str(course_num)
+            header_info = header_info[1].rsplit('.', maxsplit=2)
+            num_of_hours = int(header_info[1].strip().split(' ')[0])
 
-            # Get course number of hours
-            course_info = course_info[1].rsplit('.', maxsplit=2)
-            course_hours = int(course_info[1].strip().split(' ')[0])
+            name = header_info[0].strip()
 
-            # Get course description (leave as original string)
-            course_name = course_info[0].strip()
-
-            # Get course TCCN id, if available
-            course_tccn = ''
-            if course_info[2]:
-                temp = course_info[2].split('=')
-                course_tccn = temp[-1][1:-1]
+            if header_info[2]:
+                tccn_id = get_course_tccn_id(header_info[2])
             
-            # Course descriptions are in <p>, after <strong>
-            course_desc = ''
-            if asl_univ is True:
-                for sibling in c.br.next_siblings:
-                    course_desc += str(sibling.string).strip('\n')
-            else:
-                # NOTE: Tag has multiple children, which always starts with the course description & ends with a
-                # 'br' and None tag. Additional children in between may include prerequisites in 'a' tags, or
-                # more text in the prerequisites.
-                course_desc_block = c.find('p', class_='courseblockdesc')
-                for child in course_desc_block.children:
-                    if child.name != 'br' and not str(child).isspace():
-                        # BUG: add 1 whitespace before <a> text
-                        course_desc += str(child.string).strip('\n')
+            # NOTE: Course descriptions are in a <p> inside of c, but ASL doesn't have the same <p> description format. For ease
+            # of processing both in the same function, just send the whole c instead of c.find('p', class_='courseblockdesc').
+            description = get_course_description(c, asl_flag)
+            prerequisites = get_course_prerequisites(description)
 
-            # All courses have 'Prerequisite: ' or 'Prerequisites: '
-            course_line = course_desc.split('Prerequisite')
-            
-            # If there were any prerequisites
-            if len(course_line) > 1:
-                # Originally had '\xa0' instead of ' '
-                course_prerequisites = unicodedata.normalize("NFKD", course_line[1])
-
-                # Delete ': '
-                course_prerequisites = course_prerequisites[2:]
-
-                # Delete ending '.' and ' ' for when course has 'Prerequisites: '
-                if course_prerequisites.startswith(' '):
-                    course_prerequisites = course_prerequisites[1:]
-                if course_prerequisites.endswith('.'):
-                    course_prerequisites = course_prerequisites[:-1]
-            else:
-                course_prerequisites = ''
-
-            # Removing prerequisites from description; redundant
-            if not course_desc:
-                course_desc = course_desc.split("Prerequisite")[0].rstrip()
+            # Removing redundant "Prerequisite" section from description
+            if description:
+                description = description.split("Prerequisite")[0].rstrip()
 
             # Add course to catalog
-            all_courses.append({
-                'id': course_dept.lower() + str(course_num),    # cse1325 (lowercase to make it look nice in URLs)
-                'course_num': course_num,                       # 1325
-                #'department_id': course_dept,                      # CSE
-                'name': course_name,                            # OBJECT-ORIENTED PROGRAMMING
-                'description': course_desc,                     # Object-oriented concepts, ...
-                'num_of_hours': course_hours,                   # 3
-                'prerequisites': course_prerequisites,          # CSE 1320
-                'tccn_id': course_tccn,                         # None
-                'department_model_id': course_dept.lower()
+            all_courses.append({                                        # Example:
+                'id': department_model_id.lower() + str(course_num),    # "cse1325" (lowercase to make it look nice in URLs)
+                'course_num': course_num,                               # 1325
+                'name': name,                                           # "OBJECT-ORIENTED PROGRAMMING"
+                'description': description,                             # "Object-oriented concepts, ...""
+                'num_of_hours': num_of_hours,                           # 3
+                'prerequisites': prerequisites,                         # "CSE 1320"
+                'tccn_id': tccn_id,                                     # ''
+                'department_model_id': department_model_id.lower()      # "cse"
             })
         
-        # Get number of courses per department
+        # Add number of courses to department JSON
         all_departments[course_counter].update({'num_of_courses': num_of_courses})
         course_counter = course_counter + 1
 
