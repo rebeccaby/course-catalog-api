@@ -25,7 +25,6 @@ department_resource_fields = {
 course_resource_fields = {
     'id': fields.String,
     'course_num': fields.Integer,
-    #'department_id': fields.String,
     'name': fields.String,
     'description': fields.String,
     'num_of_hours': fields.Integer,
@@ -53,7 +52,6 @@ class DepartmentModel(db.Model):
 class CourseModel(db.Model):
     id = db.Column(db.String(MAX_COURSE_ID_LENGTH), primary_key=True)
     course_num = db.Column(db.Integer, nullable=False)
-    #department_id = db.Column(db.String(MAX_DEPT_ID_LENGTH), nullable=False)
     name = db.Column(db.String(MAX_COURSE_NAME_LENGTH), nullable=False)
     description = db.Column(db.String(MAX_COURSE_DESC_LENGTH), nullable=False)
     num_of_hours = db.Column(db.Integer, nullable=False)
@@ -69,7 +67,6 @@ class CourseModel(db.Model):
         return {
             'id': self.id,
             'course_num': int(self.course_num),
-            #'department_id': self.department_id,
             'name': self.name,
             'description': self.description,
             'num_of_hours': int(self.num_of_hours),
@@ -80,7 +77,7 @@ class CourseModel(db.Model):
 
 # Only do first time/when a column is added, will rewrite database if done again
 # Try if 'OperationalError: no such column' happens
-#db.create_all()
+db.create_all()
 
 # Argument Parsers - Validates POST/PUT requests and ensures necessary info is sent with the request
 department_put_args = reqparse.RequestParser()
@@ -93,7 +90,6 @@ department_put_args.add_argument('num_of_courses', type=int, required=True, help
 
 course_put_args.add_argument('id', type=str, required=True, help='Course ID cannot be blank.')
 course_put_args.add_argument('course_num', type=int, required=True, help='Course number cannot be blank.')
-#course_put_args.add_argument('department_id', type=str, required=True, help='Course\'s department ID cannot be blank.')
 course_put_args.add_argument('name', type=str, required=True, help='Course name cannot be blank.')
 course_put_args.add_argument('description', type=str, required=True)
 course_put_args.add_argument('num_of_hours', type=int, required=True, help='Course number of hours cannot be blank.')
@@ -181,3 +177,4 @@ api.add_resource(Course, '/course/<string:course_id>')
 
 if __name__ == '__main__':
     app.run(debug=True)
+        # Flask - "threaded=True" added into params
