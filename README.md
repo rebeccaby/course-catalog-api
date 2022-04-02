@@ -22,11 +22,19 @@ $ python3 courses_requests_script.py
 
 `uta_scraper.py`, `departments_requests_script.py`, and `courses_requests_script.py` only need to be run once, or after UTA adds new departments and/or courses to their catalog.
 
-Requests can be made locally (currently) with `curl`:
+Requests can be made locally (currently) with `curl`. An example of sending a GET request for a specific department:
+```bash
+$ curl http://127.0.0.1:5000/department/CSE
+```
+Output:
+```yaml
+{'id': "CSE", 'name': "Computer Science and Engineering", 'num_of_courses': 190}
+```
+
+An example of sending a GET request for a specific course:
 ```bash
 $ curl http://127.0.0.1:5000/course/CSE1325
 ```
-
 Output:
 ```yaml
 {'id': 'CSE1325', 'course_num': 1325, 'name': 'OBJECT-ORIENTED PROGRAMMING', 'description': 'Object-oriented concepts, class diagrams, collection classes, generics, polymorphism, and reusability.  Projects involve extensive programming and include graphical user interfaces and multithreading.', 'num_of_hours': 3, 'prerequisites': 'CSE 1320', 'tccn_id': '', 'department_model_id': 'CSE'}

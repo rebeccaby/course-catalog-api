@@ -1,7 +1,7 @@
 #!usr/bin/env python3
 
 import json
-from util.scraper_functions import *
+from utils.scraper_functions import *
 
 if __name__ == '__main__':
     try:
