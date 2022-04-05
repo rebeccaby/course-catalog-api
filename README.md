@@ -39,3 +39,18 @@ Output:
 ```yaml
 {'id': 'CSE1325', 'course_num': 1325, 'name': 'OBJECT-ORIENTED PROGRAMMING', 'description': 'Object-oriented concepts, class diagrams, collection classes, generics, polymorphism, and reusability.  Projects involve extensive programming and include graphical user interfaces and multithreading.', 'num_of_hours': 3, 'prerequisites': 'CSE 1320', 'tccn_id': '', 'department_model_id': 'CSE'}
 ```
+
+## Bugs
+  * `\u00a0` appearing instead of ` `
+
+## Future Additions
+  * Better eexception handling and null checking in scraper
+  * Have courses work off "{department}/" endpoints
+    * Ex. `http://127.0.0.1:5000/ACCT/2301` instead of `http://127.0.0.1:5000/course/ACCT2301`
+  * Asynchronous requests with scraper and PUT scripts
+    * grequests
+  * Skip a department if one page can't be scraped instead of exiting
+  * Create unit tests for API
+  * Abstract out the database adapter
+  * Add basic security measures
+  * Deployment
