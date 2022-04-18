@@ -44,7 +44,7 @@ Output:
   * `\u00a0` appearing instead of ` `
 
 ## Future Additions
-  * Better eexception handling and null checking in scraper
+  * Better exception handling and null checking in scraper
   * Have courses work off "{department}/" endpoints
     * Ex. `http://127.0.0.1:5000/ACCT/2301` instead of `http://127.0.0.1:5000/course/ACCT2301`
   * Asynchronous requests with scraper and PUT scripts
@@ -53,4 +53,5 @@ Output:
   * Create unit tests for API
   * Abstract out the database adapter
   * Add basic security measures
+  * Add requirements.txt installation line
   * Deployment
