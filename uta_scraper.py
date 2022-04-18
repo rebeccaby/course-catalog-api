@@ -91,5 +91,6 @@ if __name__ == '__main__':
         courses_json_string = json.dumps(courses_json, indent=4)
         with open('courses.json', 'w') as outfile:
             outfile.write(courses_json_string)
-    except:
+    except Exception as e:
+        print(e)
         raise SystemExit("Some error occurred in main().")
